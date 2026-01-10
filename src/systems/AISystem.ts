@@ -38,7 +38,7 @@ export class AISystem implements System {
       const playerInRange = distanceToPlayer <= ai.aggroRange;
       const attackInRange = distanceToPlayer <= ai.attackRange;
 
-      if (enemyData.adapts && ai.enemyType === 'elite') {
+      if (enemyData.adapts && ai.enemyType === 'elite' && player.weapon.weaponType !== null) {
         this.handleEliteAdaptation(weapon, player.weapon.weaponType);
       }
 
@@ -143,6 +143,7 @@ export class AISystem implements System {
     const direction = Math.sign(playerTransform.x - transform.x);
     combat.facing = direction as 1 | -1;
 
+    if (weapon.weaponType === null) return;
     const weaponData = WEAPONS[weapon.weaponType];
 
     if (ai.enemyType === 'archer') {
@@ -178,7 +179,8 @@ export class AISystem implements System {
     }
   }
 
-  private handleEliteAdaptation(weapon: WeaponComponent, playerWeapon: WeaponType): void {
+  private handleEliteAdaptation(weapon: WeaponComponent, playerWeapon: WeaponType | null): void {
+    if (playerWeapon === null) return;
     const counterWeapon: Record<WeaponType, WeaponType> = {
       rapier: 'broadsword',
       broadsword: 'bow',

@@ -88,9 +88,21 @@ export interface HealthComponent extends Component {
 
 export interface WeaponComponent extends Component {
   readonly type: 'weapon';
-  weaponType: WeaponType;
+  weaponType: WeaponType | null;
   cooldown: number;
   attackTimer: number;
+}
+
+export type AttackPhase = 'idle' | 'anticipation' | 'action' | 'impact' | 'recovery';
+
+export interface EnhancedWeaponComponent extends Component {
+  readonly type: 'enhancedWeapon';
+  weaponType: WeaponType | null;
+  phase: AttackPhase;
+  phaseTimer: number;
+  cooldown: number;
+  isThrown: boolean;
+  holdTime: number;
 }
 
 export interface CombatComponent extends Component {
@@ -98,6 +110,17 @@ export interface CombatComponent extends Component {
   attacking: boolean;
   facing: 1 | -1;
   hitStun: number;
+}
+
+export interface EnhancedCombatComponent extends Component {
+  readonly type: 'enhancedCombat';
+  attacking: boolean;
+  facing: 1 | -1;
+  hitStun: number;
+  hitPauseFrames: number;
+  isUnarmed: boolean;
+  canDisarm: boolean;
+  disarmWindow: number;
 }
 
 export interface AIComponent extends Component {
@@ -151,6 +174,15 @@ export interface ProjectileComponent extends Component {
   life: number;
 }
 
+export interface ThrownWeaponComponent extends Component {
+  readonly type: 'thrownWeapon';
+  weaponType: WeaponType;
+  owner: 'player' | 'enemy';
+  distanceTraveled: number;
+  rotation: number;
+  stuck: boolean;
+}
+
 export interface ExitZoneComponent extends Component {
   readonly type: 'exitZone';
 }
@@ -172,7 +204,13 @@ export type GameEvent =
   | { type: 'victory' }
   | { type: 'pause' }
   | { type: 'resume' }
-  | { type: 'shootProjectile'; x: number; y: number; direction: 1 | -1; owner: 'player' | 'enemy'; weapon: WeaponType };
+  | { type: 'shootProjectile'; x: number; y: number; direction: 1 | -1; owner: 'player' | 'enemy'; weapon: WeaponType }
+  | { type: 'hitPause'; frames: number }
+  | { type: 'throwWeapon'; x: number; y: number; direction: 1 | -1; owner: 'player' | 'enemy'; weapon: WeaponType }
+  | { type: 'weaponPickup'; entityId: string; weapon: WeaponType }
+  | { type: 'weaponDrop'; x: number; y: number; weapon: WeaponType }
+  | { type: 'disarm'; entityId: string }
+  | { type: 'combatHit'; attackerId: string; targetId: string; weapon: WeaponType; x: number; y: number };
 
 export type GameEventType = GameEvent['type'];
 
@@ -306,6 +344,18 @@ export interface ClashEffect {
   x: number;
   y: number;
   timer: number;
+}
+
+export interface SlashTrailPoint {
+  x: number;
+  y: number;
+  age: number;
+}
+
+export interface SlashTrail {
+  points: SlashTrailPoint[];
+  weaponType: WeaponType;
+  facing: 1 | -1;
 }
 
 // ============================================================================

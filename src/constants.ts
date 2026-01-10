@@ -184,3 +184,133 @@ export type GameState =
   | 'gameover'
   | 'levelComplete'
   | 'victory';
+
+// ============================================================================
+// PHASE 2: Combat Feel & Polish Constants
+// ============================================================================
+
+// Attack Phases
+export type AttackPhase = 'idle' | 'anticipation' | 'action' | 'impact' | 'recovery';
+
+// Attack Frame Data (at 60 FPS)
+export interface AttackFrameData {
+  readonly anticipation: number;
+  readonly action: number;
+  readonly impact: number;
+  readonly recovery: number;
+  readonly total: number;
+}
+
+export const ATTACK_FRAME_DATA: Readonly<Record<WeaponType, AttackFrameData>> = {
+  rapier: {
+    anticipation: 3,
+    action: 4,
+    impact: 2,
+    recovery: 7,
+    total: 16, // 267ms
+  },
+  broadsword: {
+    anticipation: 8,
+    action: 5,
+    impact: 4,
+    recovery: 11,
+    total: 28, // 467ms
+  },
+  bow: {
+    anticipation: 10, // draw time (minimum)
+    action: 0, // hold (variable, up to 60 frames)
+    impact: 2, // release
+    recovery: 8,
+    total: 20, // minimum without hold
+  },
+};
+
+// Screen Shake Configurations
+export interface ScreenShakeConfig {
+  readonly intensity: number;
+  readonly duration: number;
+  readonly decay: number;
+  readonly direction: 'forward' | 'horizontal' | 'omnidirectional';
+}
+
+export const SCREEN_SHAKE_CONFIGS = {
+  rapierHit: {
+    intensity: 3,
+    duration: 6,
+    decay: 0.85,
+    direction: 'forward',
+  },
+  broadswordHit: {
+    intensity: 10,
+    duration: 12,
+    decay: 0.75,
+    direction: 'omnidirectional',
+  },
+  bowHit: {
+    intensity: 5,
+    duration: 4,
+    decay: 0.9,
+    direction: 'forward',
+  },
+  clash: {
+    intensity: 8,
+    duration: 10,
+    decay: 0.8,
+    direction: 'omnidirectional',
+  },
+  playerDeath: {
+    intensity: 15,
+    duration: 20,
+    decay: 0.7,
+    direction: 'omnidirectional',
+  },
+  wyrmSnap: {
+    intensity: 12,
+    duration: 15,
+    decay: 0.75,
+    direction: 'horizontal',
+  },
+} as const satisfies Record<string, ScreenShakeConfig>;
+
+// Hit Pause (freeze frames on impact)
+export const HIT_PAUSE_FRAMES = {
+  rapier: 2,
+  broadsword: 4,
+  bow: 2,
+  clash: 3,
+} as const;
+
+// Thrown Weapon Constants
+export const THROWN_WEAPON = {
+  speed: 15,
+  maxDistance: 300,
+  gravity: 0.15,
+  rotationSpeed: 0.3,
+} as const;
+
+// Unarmed Combat Constants
+export const UNARMED = {
+  punchRange: 15,
+  punchDamage: 0.5,
+  punchCooldown: 12,
+  disarmWindow: 4, // frames of perfect timing for disarm
+} as const;
+
+// Slash Trail Constants
+export const SLASH_TRAIL = {
+  maxPoints: 8,
+  fadeFrames: 5,
+  baseWidth: 2,
+  rapierWidth: 3,
+  broadswordWidth: 8,
+} as const;
+
+// Combat Colors
+export const COMBAT_COLORS = {
+  slashTrail: 'rgba(255, 255, 255, 0.6)',
+  slashTrailRapier: 'rgba(200, 200, 200, 0.7)',
+  slashTrailBroadsword: 'rgba(150, 150, 150, 0.8)',
+  impactSpark: '#FFD700',
+  impactDust: '#8B8B8B',
+  hitFlash: '#FFFFFF',
+} as const;

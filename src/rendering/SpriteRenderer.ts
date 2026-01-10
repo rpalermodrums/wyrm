@@ -41,7 +41,7 @@ export class SpriteRenderer {
     ctx.lineTo(0, 5);
     ctx.stroke();
 
-    if (attacking && weapon) {
+    if (attacking && weapon && weapon.weaponType !== null) {
       const weaponData = WEAPONS[weapon.weaponType];
       const weaponLength = weaponData.range;
       const armX = facing * weaponLength * 0.7;

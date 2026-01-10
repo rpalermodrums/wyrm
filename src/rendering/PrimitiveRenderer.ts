@@ -83,7 +83,7 @@ export class PrimitiveRenderer {
     const projectile = entity.getComponent<ProjectileComponent>('projectile');
     const weapon = entity.getComponent<WeaponComponent>('weapon');
 
-    if (!transform || !projectile || !weapon) return;
+    if (!transform || !projectile || !weapon || weapon.weaponType === null) return;
 
     const ctx = this.ctx;
     const weaponData = WEAPONS[weapon.weaponType];

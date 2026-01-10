@@ -29,7 +29,7 @@ export class CombatSystem implements System {
         health.iframes--;
       }
 
-      if (combat.attacking) {
+      if (combat.attacking && weapon.weaponType !== null) {
         weapon.attackTimer++;
         const weaponData = WEAPONS[weapon.weaponType];
 
@@ -62,7 +62,8 @@ export class CombatSystem implements System {
   private resolveClashes(entities: Entity[]): void {
     const attacking = entities.filter(e => {
       const combat = e.getComponent<CombatComponent>('combat');
-      return combat?.attacking && !WEAPONS[e.getComponent<WeaponComponent>('weapon')!.weaponType].isRanged;
+      const weapon = e.getComponent<WeaponComponent>('weapon');
+      return combat?.attacking && weapon && weapon.weaponType !== null && !WEAPONS[weapon.weaponType].isRanged;
     });
 
     for (let i = 0; i < attacking.length; i++) {
@@ -84,7 +85,7 @@ export class CombatSystem implements System {
     const w1 = e1.getComponent<WeaponComponent>('weapon');
     const w2 = e2.getComponent<WeaponComponent>('weapon');
 
-    if (!t1 || !t2 || !w1 || !w2) return false;
+    if (!t1 || !t2 || !w1 || !w2 || w1.weaponType === null || w2.weaponType === null) return false;
 
     const range1 = WEAPONS[w1.weaponType].range;
     const range2 = WEAPONS[w2.weaponType].range;
@@ -98,6 +99,8 @@ export class CombatSystem implements System {
   private resolveCombat(e1: Entity, e2: Entity): void {
     const w1 = e1.getComponent<WeaponComponent>('weapon')!;
     const w2 = e2.getComponent<WeaponComponent>('weapon')!;
+
+    if (w1.weaponType === null || w2.weaponType === null) return;
 
     const winner = this.determineWinner(w1.weaponType, w2.weaponType);
 
@@ -133,7 +136,9 @@ export class CombatSystem implements System {
     combat.attacking = false;
     weapon.attackTimer = 0;
     combat.hitStun = 15;
-    weapon.cooldown = WEAPONS[weapon.weaponType].cooldown;
+    if (weapon.weaponType !== null) {
+      weapon.cooldown = WEAPONS[weapon.weaponType].cooldown;
+    }
   }
 
   private applyHit(attacker: Entity, defender: Entity): void {
@@ -148,6 +153,7 @@ export class CombatSystem implements System {
 
     attackerCombat.attacking = false;
     attackerWeapon.attackTimer = 0;
+    if (attackerWeapon.weaponType === null) return;
     attackerWeapon.cooldown = WEAPONS[attackerWeapon.weaponType].cooldown;
 
     if (defenderHealth.iframes === 0) {
@@ -187,13 +193,13 @@ export class CombatSystem implements System {
     const weapon = entity.getComponent<WeaponComponent>('weapon');
     if (!weapon) return;
 
+    if (weapon.weaponType === null) return;
     const currentIndex = WEAPON_CYCLE_ORDER.indexOf(weapon.weaponType);
     const nextIndex = (currentIndex + 1) % WEAPON_CYCLE_ORDER.length;
     const nextWeapon = WEAPON_CYCLE_ORDER[nextIndex];
     if (nextWeapon) {
       weapon.weaponType = nextWeapon;
+      this.eventBus.emit({ type: 'weaponCycle', newWeapon: nextWeapon });
     }
-
-    this.eventBus.emit({ type: 'weaponCycle', newWeapon: weapon.weaponType });
   }
 }
