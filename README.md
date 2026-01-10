@@ -72,12 +72,14 @@ npm run test:watch
 ### Keyboard
 - **WASD / Arrow Keys**: Move and jump
 - **Z / J**: Attack
+- **K**: Throw weapon
 - **ESC / P**: Pause
 
 ### Gamepad (Xbox layout)
 - **D-Pad / Left Stick**: Move
 - **A Button**: Jump
 - **X Button**: Attack
+- **Y Button**: Throw weapon
 - **Start**: Pause
 
 ## Game Mechanics

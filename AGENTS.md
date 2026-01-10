@@ -30,11 +30,19 @@ src/
 ├── core/           # Engine: GameLoop, Canvas, Camera, Events
 ├── ecs/            # Entity-Component-System: Entity, World
 ├── components/     # Pure data components (Transform, Velocity, etc.)
+│   └── player/     # Enhanced components: EnhancedWeapon, EnhancedCombat
 ├── systems/        # Logic processors (Input, Movement, Combat, AI, Render)
+│   └── Enhanced*      # Phase 2 enhanced systems: EnhancedCombatSystem, EnhancedInputSystem
 ├── entities/       # Entity factories (Player, Enemy, Wyrm, Platform)
+│   ├── EnhancedPlayer.ts   # Player factory using enhanced components
+│   └── ThrownWeapon.ts     # Thrown weapon entity with arc trajectory
+├── effects/       # Combat visual effects (Phase 2)
+│   └── CombatEffects.ts   # Hit pause, screen shake, slash trails
 ├── scenes/         # Game scenes (Title, Game, Pause, Death, Victory)
 ├── managers/       # Singletons (Scene, Asset, Audio, Config)
 ├── rendering/      # Drawing utilities (Sprite, Primitive, Particle)
+│   ├── WeaponRenderer.ts           # Detailed weapon sprites (Phase 2)
+│   └── EnhancedSpriteRenderer.ts   # Enhanced rendering integration
 ├── levels/         # Level loader + JSON data
 ├── input/          # Input adapters (Keyboard, Gamepad)
 ├── utils/          # Math utilities (Vector2, AABB, Timer, ObjectPool)
