@@ -1,40 +1,60 @@
+/**
+ * World - ECS World container
+ *
+ * Manages entities and systems, runs the update loop.
+ * Systems are sorted by priority and run in order.
+ */
+
 import type { Entity as IEntity, System, World as IWorld } from '../types';
 import { Entity } from './Entity';
 
 export class World implements IWorld {
-  private entities: Map<string, IEntity> = new Map();
-  private systems: System[] = [];
-  private entitiesToDestroy: Set<string> = new Set();
+  private readonly entities: Map<string, IEntity> = new Map();
+  private readonly systems: System[] = [];
+  private readonly entitiesToDestroy: Set<string> = new Set();
 
   createEntity(): IEntity {
     const entity = new Entity();
     this.entities.set(entity.id, entity);
-    
-    this.systems.forEach((system) => {
-      if (system.onEntityAdded && entity.hasComponents(system.requiredComponents as string[])) {
+    // Note: onEntityAdded is NOT called here because entity has no components yet.
+    // Call notifyEntityReady() after adding components to trigger system hooks.
+    return entity;
+  }
+
+  /**
+   * Notify systems that an entity is fully configured and ready.
+   * Call this after adding all components to a new entity.
+   */
+  notifyEntityReady(entity: IEntity): void {
+    for (const system of this.systems) {
+      if (system.onEntityAdded && entity.hasComponents(system.requiredComponents)) {
         system.onEntityAdded(entity);
       }
-    });
-
-    return entity;
+    }
   }
 
   destroyEntity(id: string): void {
     this.entitiesToDestroy.add(id);
   }
 
-  private processDestructions(): void {
-    this.entitiesToDestroy.forEach((id) => {
+  /**
+   * Process all queued entity destructions immediately.
+   * Call this after unloadLevel() to ensure entities are removed
+   * before loading new ones (prevents one-frame overlap).
+   */
+  processDestructions(): void {
+    for (const id of this.entitiesToDestroy) {
       const entity = this.entities.get(id);
       if (entity) {
-        this.systems.forEach((system) => {
-          if (system.onEntityRemoved && entity.hasComponents(system.requiredComponents as string[])) {
+        // Notify systems before removal
+        for (const system of this.systems) {
+          if (system.onEntityRemoved && entity.hasComponents(system.requiredComponents)) {
             system.onEntityRemoved(entity);
           }
-        });
+        }
         this.entities.delete(id);
       }
-    });
+    }
     this.entitiesToDestroy.clear();
   }
 
@@ -42,9 +62,9 @@ export class World implements IWorld {
     return this.entities.get(id);
   }
 
-  query(componentTypes: string[]): IEntity[] {
+  query(componentTypes: readonly string[]): IEntity[] {
     const results: IEntity[] = [];
-    
+
     for (const entity of this.entities.values()) {
       if (entity.hasComponents(componentTypes)) {
         results.push(entity);
@@ -54,7 +74,7 @@ export class World implements IWorld {
     return results;
   }
 
-  queryOne(componentTypes: string[]): IEntity | undefined {
+  queryOne(componentTypes: readonly string[]): IEntity | undefined {
     for (const entity of this.entities.values()) {
       if (entity.hasComponents(componentTypes)) {
         return entity;
@@ -75,9 +95,13 @@ export class World implements IWorld {
     }
   }
 
+  getSystem(name: string): System | undefined {
+    return this.systems.find((s) => s.name === name);
+  }
+
   update(deltaTime: number): void {
     for (const system of this.systems) {
-      const entities = this.query(system.requiredComponents as string[]);
+      const entities = this.query(system.requiredComponents);
       system.update(entities, deltaTime);
     }
 

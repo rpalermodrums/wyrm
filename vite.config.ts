@@ -11,14 +11,6 @@ export default defineConfig({
     target: 'es2020',
     minify: 'terser',
     sourcemap: true,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'game-core': ['./src/core/GameLoop.ts', './src/core/Canvas.ts'],
-          'game-ecs': ['./src/ecs/Entity.ts', './src/ecs/World.ts'],
-        },
-      },
-    },
   },
   server: {
     port: 5173,

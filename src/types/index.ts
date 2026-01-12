@@ -1,14 +1,14 @@
-// src/types/index.ts - Core type definitions for Wyrm Chase
+/**
+ * Wyrm Chase V2 - Type Definitions
+ *
+ * Core type definitions for the ECS architecture and game systems.
+ * See WYRM_CHASE_V2_SPEC.md for full documentation.
+ */
 
-import { CollisionLayer } from '../constants';
-import type { WeaponType, EnemyType, HazardType, AIState } from '../constants';
-
-// Re-export types from constants for convenience
-export type { WeaponType, EnemyType, HazardType, AIState };
-export { CollisionLayer };
+import type * as THREE from 'three';
 
 // ============================================================================
-// ECS Types
+// ECS Core Types
 // ============================================================================
 
 export interface Component {
@@ -21,8 +21,8 @@ export interface Entity {
   addComponent<T extends Component>(component: T): void;
   getComponent<T extends Component>(type: string): T | undefined;
   hasComponent(type: string): boolean;
+  hasComponents(types: readonly string[]): boolean;
   removeComponent(type: string): void;
-  hasComponents(types: string[]): boolean;
 }
 
 export interface System {
@@ -38,13 +38,19 @@ export interface World {
   createEntity(): Entity;
   destroyEntity(id: string): void;
   getEntity(id: string): Entity | undefined;
-  query(componentTypes: string[]): Entity[];
-  queryOne(componentTypes: string[]): Entity | undefined;
+  query(componentTypes: readonly string[]): Entity[];
+  queryOne(componentTypes: readonly string[]): Entity | undefined;
   addSystem(system: System): void;
   removeSystem(name: string): void;
+  getSystem(name: string): System | undefined;
   update(deltaTime: number): void;
   clear(): void;
   getAllEntities(): Entity[];
+  readonly entityCount: number;
+  /** Notify systems that an entity is fully configured. Call after adding components. */
+  notifyEntityReady(entity: Entity): void;
+  /** Process all queued entity destructions immediately. Call after unloadLevel(). */
+  processDestructions(): void;
 }
 
 // ============================================================================
@@ -52,139 +58,153 @@ export interface World {
 // ============================================================================
 
 export interface TransformComponent extends Component {
-  readonly type: 'transform';
+  type: 'transform';
   x: number;
   y: number;
-  prevX: number;
-  prevY: number;
+  z: number;
   rotation: number;
-  scale: number;
+  scale: { x: number; y: number; z: number };
 }
 
 export interface VelocityComponent extends Component {
-  readonly type: 'velocity';
+  type: 'velocity';
   vx: number;
   vy: number;
-  maxSpeed: number;
+  vz: number;
 }
 
 export interface ColliderComponent extends Component {
-  readonly type: 'collider';
+  type: 'collider';
   width: number;
   height: number;
+  depth: number;
   offsetX: number;
   offsetY: number;
   layer: CollisionLayer;
-  solid: boolean;
+  mask: number;
 }
 
-export interface HealthComponent extends Component {
-  readonly type: 'health';
-  current: number;
-  max: number;
-  lives: number;
-  iframes: number;
+export interface FencerComponent extends Component {
+  type: 'fencer';
+  swordPosition: SwordPosition;
+  isLunging: boolean;
+  lungeFrame: number;
+  canParry: boolean;
+  disarmWindow: number;
+  facingRight: boolean;
 }
 
 export interface WeaponComponent extends Component {
-  readonly type: 'weapon';
-  weaponType: WeaponType | null;
-  cooldown: number;
-  attackTimer: number;
+  type: 'weapon';
+  weaponType: WeaponType;
+  attackCooldown: number;
+  isAttacking: boolean;
+  attackPhase: AttackPhase;
+  attackFrame: number;
 }
 
-export type AttackPhase = 'idle' | 'anticipation' | 'action' | 'impact' | 'recovery';
-
-export interface EnhancedWeaponComponent extends Component {
-  readonly type: 'enhancedWeapon';
-  weaponType: WeaponType | null;
-  phase: AttackPhase;
-  phaseTimer: number;
-  cooldown: number;
-  isThrown: boolean;
-  holdTime: number;
-}
-
-export interface CombatComponent extends Component {
-  readonly type: 'combat';
-  attacking: boolean;
-  facing: 1 | -1;
-  hitStun: number;
-}
-
-export interface EnhancedCombatComponent extends Component {
-  readonly type: 'enhancedCombat';
-  attacking: boolean;
-  facing: 1 | -1;
-  hitStun: number;
-  hitPauseFrames: number;
-  isUnarmed: boolean;
-  canDisarm: boolean;
-  disarmWindow: number;
+export interface HealthComponent extends Component {
+  type: 'health';
+  current: number;
+  max: number;
+  invincibilityFrames: number;
+  isKnockedDown: boolean;
+  knockdownFrames: number;
 }
 
 export interface AIComponent extends Component {
-  readonly type: 'ai';
-  enemyType: EnemyType;
+  type: 'ai';
+  aiType: EnemyType;
   state: AIState;
-  stateTimer: number;
-  aggroRange: number;
+  targetEntityId: string | null;
+  detectionRange: number;
   attackRange: number;
-  homeX: number;
-  patrolDir: 1 | -1;
-  shootCooldown: number;
+  decisionCooldown: number;
 }
 
 export interface WyrmComponent extends Component {
-  readonly type: 'wyrm';
-  segments: Array<{ x: number; y: number }>;
-  targetY: number;
+  type: 'wyrm';
+  segments: Array<{ x: number; y: number; z: number; baseY?: number }>;
   baseSpeed: number;
   currentSpeed: number;
+  targetY: number;
 }
 
-export interface SpriteComponent extends Component {
-  readonly type: 'sprite';
-  animation: string;
-  frame: number;
-  color: string;
+export interface ThreeObjectComponent extends Component {
+  type: 'threeObject';
+  object: THREE.Object3D;
+  mixer?: THREE.AnimationMixer;
 }
 
 export interface PlayerControlledComponent extends Component {
-  readonly type: 'playerControlled';
-  coyoteTime: number;
-  jumpBuffer: number;
-  grounded: boolean;
+  type: 'playerControlled';
+  isGrounded: boolean;
+  coyoteFrames: number;
+  jumpBufferFrames: number;
+  rollFrames: number;
+  isRolling: boolean;
 }
 
 export interface PlatformComponent extends Component {
-  readonly type: 'platform';
-  platformType: 'ground' | 'platform';
+  type: 'platform';
+  isOneWay: boolean;
 }
 
 export interface HazardComponent extends Component {
-  readonly type: 'hazard';
+  type: 'hazard';
   hazardType: HazardType;
 }
 
-export interface ProjectileComponent extends Component {
-  readonly type: 'projectile';
-  owner: 'player' | 'enemy';
-  weaponType: WeaponType;
+export interface GhostComponent extends Component {
+  type: 'ghost';
   life: number;
+  maxLife: number;
+  opacity: number;
 }
 
 export interface ThrownWeaponComponent extends Component {
-  readonly type: 'thrownWeapon';
+  type: 'thrownWeapon';
   weaponType: WeaponType;
-  owner: 'player' | 'enemy';
-  distanceTraveled: number;
-  rotation: number;
-  stuck: boolean;
+  ownerId: string;           // Who threw it (can't damage self)
+  direction: number;         // 1 for right, -1 for left
+  traveledDistance: number;  // Track for MAX_THROW_DISTANCE
+  rotation: number;          // Visual spin
+  canBePickedUp: boolean;    // True when stuck in ground/wall
+  stuckIn: 'ground' | 'wall' | null;
 }
 
-export interface ExitZoneComponent extends Component {
-  readonly type: 'exitZone';
+// ============================================================================
+// Game State Types
+// ============================================================================
+
+export type SwordPosition = 'high' | 'mid' | 'low';
+
+export type WeaponType = 'rapier' | 'broadsword' | 'bow' | 'none';
+
+export type HazardType = 'pit' | 'spikes';
+
+export type AttackPhase = 'idle' | 'anticipation' | 'active' | 'recovery';
+
+export type EnemyType = 'guard' | 'brute' | 'archer' | 'runner' | 'elite';
+
+export type AIState = 'idle' | 'patrol' | 'engage' | 'attack' | 'retreat' | 'dead';
+
+export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'death' | 'victory' | 'gameover';
+
+export type InputAction = 'moveLeft' | 'moveRight' | 'jump' | 'swordUp' | 'swordDown' | 'attack' | 'throw' | 'roll' | 'pause';
+
+// ============================================================================
+// Collision Types
+// ============================================================================
+
+export enum CollisionLayer {
+  NONE = 0,
+  PLAYER = 1 << 0,
+  ENEMY = 1 << 1,
+  PLATFORM = 1 << 2,
+  HAZARD = 1 << 3,
+  WYRM = 1 << 4,
+  PROJECTILE = 1 << 5,
 }
 
 // ============================================================================
@@ -192,63 +212,32 @@ export interface ExitZoneComponent extends Component {
 // ============================================================================
 
 export type GameEvent =
-  | { type: 'playerDeath'; cause: 'hit' | 'hazard' | 'wyrm' | 'pit' }
-  | { type: 'enemyDeath'; enemyId: string }
-  | { type: 'weaponCycle'; newWeapon: WeaponType }
-  | { type: 'screenTransition'; from: number; to: number }
-  | { type: 'levelComplete'; levelIndex: number }
-  | { type: 'clash'; x: number; y: number }
+  | { type: 'playerDeath'; cause: 'wyrm' | 'pit' | 'enemy' }
+  | { type: 'enemyDeath'; entityId: string; droppedWeapon: WeaponType }
+  | { type: 'weaponClash'; entityA: string; entityB: string; x: number; y: number }
+  | { type: 'disarm'; victimId: string; weapon: WeaponType }
+  | { type: 'parry'; defenderId: string; attackerId: string }
   | { type: 'screenShake'; intensity: number; duration: number }
-  | { type: 'spawnParticles'; x: number; y: number; color: string; count: number }
-  | { type: 'gameOver' }
-  | { type: 'victory' }
-  | { type: 'pause' }
-  | { type: 'resume' }
-  | { type: 'shootProjectile'; x: number; y: number; direction: 1 | -1; owner: 'player' | 'enemy'; weapon: WeaponType }
   | { type: 'hitPause'; frames: number }
-  | { type: 'throwWeapon'; x: number; y: number; direction: 1 | -1; owner: 'player' | 'enemy'; weapon: WeaponType }
-  | { type: 'weaponPickup'; entityId: string; weapon: WeaponType }
-  | { type: 'weaponDrop'; x: number; y: number; weapon: WeaponType }
-  | { type: 'disarm'; entityId: string }
-  | { type: 'combatHit'; attackerId: string; targetId: string; weapon: WeaponType; x: number; y: number };
-
-export type GameEventType = GameEvent['type'];
-
-export type EventHandler<T extends GameEvent = GameEvent> = (event: T) => void;
+  | { type: 'levelComplete' }
+  | { type: 'gameOver' }
+  | { type: 'weaponThrown'; entityId: string; weapon: WeaponType; x: number; y: number; direction: number }
+  | { type: 'screenTransition'; direction: 'right'; newScreen: number; totalScreens: number }
+  | { type: 'gameStateChange'; newState: GameState }
+  | { type: 'entityHit'; entityId: string; damage: number }
+  | { type: 'entityJump'; entityId: string; x: number; y: number }
+  | { type: 'entityLand'; entityId: string; x: number; y: number };
 
 export interface EventBus {
-  emit<T extends GameEvent>(event: T): void;
-  on<T extends GameEventType>(
+  emit(event: GameEvent): void;
+  on<T extends GameEvent['type']>(
     type: T,
-    handler: EventHandler<Extract<GameEvent, { type: T }>>
-  ): () => void;
-  off(type: GameEventType, handler: EventHandler): void;
-  clear(): void;
-}
-
-// ============================================================================
-// Scene Types
-// ============================================================================
-
-export interface Scene {
-  readonly name: string;
-  enter(): void | Promise<void>;
-  exit(): void;
-  update(deltaTime: number): void;
-  render(ctx: CanvasRenderingContext2D): void;
-  pause?(): void;
-  resume?(): void;
-}
-
-export interface SceneManager {
-  addScene(name: string, scene: Scene): void;
-  transition(name: string): Promise<void>;
-  push(name: string): Promise<void>;
-  pop(): void;
-  replace(name: string): void;
-  update(deltaTime: number): void;
-  render(ctx: CanvasRenderingContext2D): void;
-  getCurrentScene(): Scene | undefined;
+    handler: (event: Extract<GameEvent, { type: T }>) => void
+  ): void;
+  off<T extends GameEvent['type']>(
+    type: T,
+    handler: (event: Extract<GameEvent, { type: T }>) => void
+  ): void;
 }
 
 // ============================================================================
@@ -256,124 +245,37 @@ export interface SceneManager {
 // ============================================================================
 
 export interface LevelData {
-  id: string;
-  name: string;
-  screens: ScreenData[];
-  wyrmConfig: WyrmConfig;
+  readonly id: string;
+  readonly name: string;
+  readonly screens: readonly ScreenData[];
 }
 
 export interface ScreenData {
-  platforms: PlatformData[];
-  enemies: EnemySpawnData[];
-  hazards: HazardData[];
-  pits?: PitData[];
+  readonly index: number;
+  readonly platforms: readonly PlatformData[];
+  readonly enemies: readonly EnemySpawnData[];
+  readonly hazards: readonly HazardData[];
 }
 
 export interface PlatformData {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly isOneWay?: boolean;
 }
 
 export interface EnemySpawnData {
-  x: number;
-  y: number;
-  type: EnemyType;
-  weapon: WeaponType;
+  readonly x: number;
+  readonly y: number;
+  readonly type: EnemyType;
+  readonly facingRight: boolean;
 }
 
 export interface HazardData {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  type: HazardType;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly type: HazardType;
 }
-
-export interface PitData {
-  x: number;
-  y: number;
-  w: number;
-}
-
-export interface WyrmConfig {
-  baseSpeed: number;
-  surgeMultiplier: number;
-  slowMultiplier: number;
-}
-
-// ============================================================================
-// Input Types
-// ============================================================================
-
-export interface InputState {
-  readonly left: boolean;
-  readonly right: boolean;
-  readonly jump: boolean;
-  readonly jumpPressed: boolean;
-  readonly attack: boolean;
-  readonly attackPressed: boolean;
-  readonly pause: boolean;
-  readonly pausePressed: boolean;
-}
-
-export interface InputAdapter {
-  update(): void;
-  isDown(action: string): boolean;
-  isPressed(action: string): boolean;
-  getAxis(axis: 'horizontal' | 'vertical'): number;
-}
-
-// ============================================================================
-// Rendering Types
-// ============================================================================
-
-export interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  color: string;
-  size: number;
-}
-
-export interface ClashEffect {
-  x: number;
-  y: number;
-  timer: number;
-}
-
-export interface SlashTrailPoint {
-  x: number;
-  y: number;
-  age: number;
-}
-
-export interface SlashTrail {
-  points: SlashTrailPoint[];
-  weaponType: WeaponType;
-  facing: 1 | -1;
-}
-
-// ============================================================================
-// Game Config Types
-// ============================================================================
-
-export interface GameConfig {
-  startingLives: number;
-  startingWeapon: WeaponType;
-  playerColor: string;
-  soundEnabled: boolean;
-  musicEnabled: boolean;
-}
-
-export const DEFAULT_CONFIG: GameConfig = {
-  startingLives: 3,
-  startingWeapon: 'rapier',
-  playerColor: '#E63946',
-  soundEnabled: true,
-  musicEnabled: true,
-};

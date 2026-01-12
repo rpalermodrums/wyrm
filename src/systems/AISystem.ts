@@ -1,197 +1,197 @@
-import type { System, Entity, AIComponent, TransformComponent, VelocityComponent, WeaponComponent, CombatComponent, EventBus } from '../types';
-import { ENEMY_TYPES, WEAPONS, type WeaponType } from '../constants';
+import type {
+  System,
+  Entity,
+  World,
+  AIComponent,
+  TransformComponent,
+  VelocityComponent,
+  FencerComponent,
+  WeaponComponent,
+  SwordPosition,
+} from '../types';
+import { SYSTEM_PRIORITY, ENEMIES, AI_BEHAVIOR } from '../constants';
+import { createLogger } from '../utils/debug';
+
+const log = createLogger('AISystem');
+
+// Destructure AI behavior constants
+const {
+  DECISION_COOLDOWN_FRAMES,
+  RETREAT_DISTANCE,
+  RETREAT_DURATION_FRAMES,
+  DISENGAGE_RANGE_MULTIPLIER,
+  COUNTER_PROBABILITY,
+  RETREAT_SPEED_MULTIPLIER,
+} = AI_BEHAVIOR;
+
+const COUNTER_POSITIONS: Record<SwordPosition, SwordPosition> = {
+  high: 'mid',
+  mid: 'low',
+  low: 'high',
+};
 
 export class AISystem implements System {
   readonly name = 'AISystem';
-  readonly requiredComponents = ['ai', 'transform', 'velocity', 'weapon', 'combat'] as const;
-  readonly priority = 20;
+  readonly requiredComponents = ['ai', 'transform', 'velocity', 'fencer', 'weapon'] as const;
+  readonly priority = SYSTEM_PRIORITY.AI;
 
-  constructor(private readonly eventBus: EventBus) {}
+  private world: World | null = null;
 
-  update(entities: Entity[], _deltaTime: number): void {
-    const playerEntity = this.findPlayer(entities);
-    if (!playerEntity) return;
+  setWorld(world: World): void {
+    this.world = world;
+    log('World reference set');
+  }
 
-    const player = {
-      transform: playerEntity.getComponent<TransformComponent>('transform')!,
-      velocity: playerEntity.getComponent<VelocityComponent>('velocity')!,
-      weapon: playerEntity.getComponent<WeaponComponent>('weapon')!,
-    };
+  update(entities: readonly Entity[], _deltaTime: number): void {
+    const player = this.world?.queryOne(['playerControlled', 'transform']);
+    if (!player) return;
+
+    const playerTransform = player.getComponent<TransformComponent>('transform');
+    const playerFencer = player.getComponent<FencerComponent>('fencer');
+    if (!playerTransform) return;
 
     for (const entity of entities) {
-      if (!entity.hasComponents(this.requiredComponents as unknown as string[])) continue;
+      const ai = entity.getComponent<AIComponent>('ai');
+      const transform = entity.getComponent<TransformComponent>('transform');
+      const velocity = entity.getComponent<VelocityComponent>('velocity');
+      const fencer = entity.getComponent<FencerComponent>('fencer');
+      const weapon = entity.getComponent<WeaponComponent>('weapon');
 
-      const ai = entity.getComponent<AIComponent>('ai')!;
-      const transform = entity.getComponent<TransformComponent>('transform')!;
-      const velocity = entity.getComponent<VelocityComponent>('velocity')!;
-      const weapon = entity.getComponent<WeaponComponent>('weapon')!;
-      const combat = entity.getComponent<CombatComponent>('combat')!;
+      if (!ai || !transform || !velocity || !fencer || !weapon) continue;
+      if (ai.state === 'dead') continue;
 
-      if (combat.hitStun > 0) {
-        velocity.vx = 0;
-        ai.state = 'stagger';
-        continue;
+      const distance = Math.abs(playerTransform.x - transform.x);
+      const enemyConfig = ENEMIES[ai.aiType];
+
+      if (ai.decisionCooldown > 0) {
+        ai.decisionCooldown -= 1;
       }
 
-      const enemyData = ENEMY_TYPES[ai.enemyType];
-      const distanceToPlayer = Math.abs(player.transform.x - transform.x);
-      const playerInRange = distanceToPlayer <= ai.aggroRange;
-      const attackInRange = distanceToPlayer <= ai.attackRange;
-
-      if (enemyData.adapts && ai.enemyType === 'elite' && player.weapon.weaponType !== null) {
-        this.handleEliteAdaptation(weapon, player.weapon.weaponType);
-      }
-
-      switch (ai.state) {
-        case 'idle':
-        case 'patrol':
-          if (playerInRange) {
-            ai.state = 'chase';
-            ai.stateTimer = 0;
-          } else {
-            this.handlePatrol(ai, transform, velocity, enemyData);
-          }
-          break;
-
-        case 'chase':
-          if (!playerInRange) {
-            ai.state = 'idle';
-            velocity.vx = 0;
-          } else if (attackInRange) {
-            ai.state = 'attack';
-            ai.stateTimer = 0;
-          } else {
-            this.handleChase(ai, transform, velocity, combat, player.transform, enemyData);
-          }
-          break;
-
-        case 'attack':
-          if (!attackInRange) {
-            ai.state = 'chase';
-            velocity.vx = 0;
-          } else {
-            this.handleAttack(ai, transform, velocity, weapon, combat, player.transform, this.eventBus);
-          }
-          break;
-
-        case 'stagger':
-          if (combat.hitStun === 0) {
-            ai.state = 'idle';
-            ai.stateTimer = 0;
-          }
-          break;
-      }
-
-      ai.stateTimer++;
+      this.updateState(ai, distance, weapon);
+      this.executeState(ai, transform, velocity, fencer, weapon, playerTransform, playerFencer, enemyConfig, distance);
     }
   }
 
-  private findPlayer(entities: Entity[]): Entity | undefined {
-    return entities.find(e => e.hasComponent('playerControlled'));
-  }
-
-  private handlePatrol(
+  private updateState(
     ai: AIComponent,
-    transform: TransformComponent,
-    velocity: VelocityComponent,
-    enemyData: { speed: number }
+    distance: number,
+    weapon: WeaponComponent
   ): void {
-    if (enemyData.speed === 0) {
-      velocity.vx = 0;
-      return;
-    }
+    if (ai.decisionCooldown > 0) return;
 
-    const patrolRange = 100;
-    const leftBound = ai.homeX - patrolRange;
-    const rightBound = ai.homeX + patrolRange;
+    const enemyConfig = ENEMIES[ai.aiType];
+    const previousState = ai.state;
 
-    if (transform.x <= leftBound) ai.patrolDir = 1;
-    if (transform.x >= rightBound) ai.patrolDir = -1;
-
-    velocity.vx = ai.patrolDir * enemyData.speed * 0.5;
-    ai.state = 'patrol';
-  }
-
-  private handleChase(
-    _ai: AIComponent,
-    transform: TransformComponent,
-    velocity: VelocityComponent,
-    combat: CombatComponent,
-    playerTransform: TransformComponent,
-    enemyData: { speed: number }
-  ): void {
-    if (enemyData.speed === 0) {
-      velocity.vx = 0;
-      return;
-    }
-
-    const direction = Math.sign(playerTransform.x - transform.x);
-    velocity.vx = direction * enemyData.speed;
-    combat.facing = direction as 1 | -1;
-  }
-
-  private handleAttack(
-    ai: AIComponent,
-    transform: TransformComponent,
-    velocity: VelocityComponent,
-    weapon: WeaponComponent,
-    combat: CombatComponent,
-    playerTransform: TransformComponent,
-    eventBus: EventBus
-  ): void {
-    velocity.vx = 0;
-    const direction = Math.sign(playerTransform.x - transform.x);
-    combat.facing = direction as 1 | -1;
-
-    if (weapon.weaponType === null) return;
-    const weaponData = WEAPONS[weapon.weaponType];
-
-    if (ai.enemyType === 'archer') {
-      if (ai.shootCooldown === 0 && weapon.cooldown === 0) {
-        eventBus.emit({
-          type: 'shootProjectile',
-          x: transform.x,
-          y: transform.y,
-          direction: combat.facing,
-          owner: 'enemy',
-          weapon: weapon.weaponType,
-        });
-        ai.shootCooldown = ENEMY_TYPES.archer.shootCooldown!;
-        weapon.cooldown = weaponData.cooldown;
-      }
-
-      if (ai.shootCooldown > 0) ai.shootCooldown--;
-      if (weapon.cooldown > 0) weapon.cooldown--;
-    } else {
-      if (weapon.cooldown === 0) {
-        combat.attacking = true;
-        weapon.cooldown = weaponData.cooldown;
-        weapon.attackTimer = weaponData.speed;
-      }
-
-      if (weapon.cooldown > 0) weapon.cooldown--;
-      if (weapon.attackTimer > 0) {
-        weapon.attackTimer--;
-        if (weapon.attackTimer === 0) {
-          combat.attacking = false;
+    switch (ai.state) {
+      case 'idle':
+        if (distance < enemyConfig.detectionRange) {
+          ai.state = 'engage';
+          ai.decisionCooldown = DECISION_COOLDOWN_FRAMES;
         }
+        break;
+
+      case 'patrol':
+        if (distance < enemyConfig.detectionRange) {
+          ai.state = 'engage';
+          ai.decisionCooldown = DECISION_COOLDOWN_FRAMES;
+        }
+        break;
+
+      case 'engage':
+        if (distance > enemyConfig.detectionRange * 1.2) {
+          ai.state = 'idle';
+          ai.decisionCooldown = DECISION_COOLDOWN_FRAMES;
+        } else if (distance < enemyConfig.attackRange && !weapon.isAttacking) {
+          ai.state = 'attack';
+          ai.decisionCooldown = DECISION_COOLDOWN_FRAMES;
+        }
+        break;
+
+      case 'attack':
+        if (weapon.attackPhase === 'recovery') {
+          ai.state = 'retreat';
+          ai.decisionCooldown = RETREAT_DURATION_FRAMES;
+        } else if (weapon.attackPhase === 'idle' && !weapon.isAttacking) {
+          ai.state = 'engage';
+          ai.decisionCooldown = DECISION_COOLDOWN_FRAMES;
+        }
+        break;
+
+      case 'retreat':
+        if (ai.decisionCooldown <= 0) {
+          ai.state = 'engage';
+          ai.decisionCooldown = DECISION_COOLDOWN_FRAMES;
+        }
+        break;
+    }
+
+    if (ai.state !== previousState) {
+      log(`State transition: ${previousState} -> ${ai.state}, distance: ${distance.toFixed(1)}`);
+      // Only set default cooldown if not already set by a specific transition
+      // (e.g., retreat transition sets RETREAT_DURATION_FRAMES which should be preserved)
+      if (ai.decisionCooldown <= 0) {
+        ai.decisionCooldown = DECISION_COOLDOWN_FRAMES;
       }
     }
   }
 
-  private handleEliteAdaptation(weapon: WeaponComponent, playerWeapon: WeaponType | null): void {
-    if (playerWeapon === null) return;
-    const counterWeapon: Record<WeaponType, WeaponType> = {
-      rapier: 'broadsword',
-      broadsword: 'bow',
-      bow: 'rapier',
-    };
+  private executeState(
+    ai: AIComponent,
+    transform: TransformComponent,
+    velocity: VelocityComponent,
+    fencer: FencerComponent,
+    weapon: WeaponComponent,
+    playerTransform: TransformComponent,
+    playerFencer: FencerComponent | undefined,
+    enemyConfig: typeof ENEMIES[keyof typeof ENEMIES],
+    distance: number
+  ): void {
+    fencer.facingRight = playerTransform.x > transform.x;
 
-    const desiredWeapon = counterWeapon[playerWeapon];
-    if (weapon.weaponType !== desiredWeapon) {
-      weapon.weaponType = desiredWeapon;
-      weapon.cooldown = 0;
-      weapon.attackTimer = 0;
+    switch (ai.state) {
+      case 'idle':
+        velocity.vx = 0;
+        break;
+
+      case 'patrol':
+        velocity.vx = 0;
+        break;
+
+      case 'engage':
+        if (distance > enemyConfig.attackRange) {
+          const direction = playerTransform.x > transform.x ? 1 : -1;
+          velocity.vx = direction * enemyConfig.speed;
+        } else {
+          velocity.vx = 0;
+        }
+
+        if (playerFencer && enemyConfig.adapts) {
+          fencer.swordPosition = COUNTER_POSITIONS[playerFencer.swordPosition];
+        } else if (playerFencer) {
+          const shouldCounter = Math.random() < 0.3;
+          if (shouldCounter) {
+            fencer.swordPosition = COUNTER_POSITIONS[playerFencer.swordPosition];
+          }
+        }
+        break;
+
+      case 'attack':
+        velocity.vx = 0;
+        if (!weapon.isAttacking && weapon.attackPhase === 'idle') {
+          weapon.isAttacking = true;
+          weapon.attackPhase = 'anticipation';
+          weapon.attackFrame = 0;
+        }
+        break;
+
+      case 'retreat':
+        const retreatDirection = playerTransform.x > transform.x ? -1 : 1;
+        if (distance < RETREAT_DISTANCE) {
+          velocity.vx = retreatDirection * enemyConfig.speed * 0.7;
+        } else {
+          velocity.vx = 0;
+        }
+        break;
     }
   }
 }

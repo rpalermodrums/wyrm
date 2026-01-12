@@ -1,316 +1,309 @@
-// src/constants.ts - Shared constants for Wyrm Chase
-// All agents import from this file for consistency
+/**
+ * Wyrm Chase V2 - Game Constants
+ *
+ * All game configuration values in one place.
+ * See WYRM_CHASE_V2_SPEC.md for detailed explanations.
+ */
 
-export const CANVAS_WIDTH = 800;
-export const CANVAS_HEIGHT = 450;
-export const TARGET_FPS = 60;
-export const FIXED_TIMESTEP = 1000 / TARGET_FPS; // 16.67ms
-export const MAX_DELTA = 250; // Prevent death spiral
+import type { WeaponType, EnemyType } from './types';
 
+// ============================================================================
+// Display
+// ============================================================================
+
+export const SCREEN_WIDTH = 1280;
+export const SCREEN_HEIGHT = 720;
+export const ASPECT_RATIO = 16 / 9;
+export const SCREENS_PER_LEVEL = 5;
+export const TOTAL_LEVEL_WIDTH = SCREEN_WIDTH * SCREENS_PER_LEVEL;
+
+// Three.js world units for visible screen width (camera view is ~30 units wide)
+export const SCREEN_WIDTH_UNITS = 30;
+
+// ============================================================================
 // Physics
-export const GRAVITY = 0.6;
-export const PLAYER_SPEED = 5;
-export const PLAYER_JUMP_FORCE = -14;
-export const COYOTE_TIME = 8; // frames
-export const JUMP_BUFFER = 6; // frames
-export const PIT_DEATH_Y = CANVAS_HEIGHT + 50;
+// ============================================================================
 
+export const TARGET_FPS = 60;
+export const FIXED_TIMESTEP = 1000 / TARGET_FPS;
+export const MAX_DELTA = 250;
+
+// Note: In Three.js, Y+ is UP. Gravity pulls down (negative), jump pushes up (positive)
+// Physics values tuned for Three.js units (camera view ~30 units wide)
+export const GRAVITY = -0.03; // Slightly stronger gravity for snappier jumps
+export const MAX_FALL_SPEED = -0.5; // Terminal velocity - prevents tunneling through thin platforms
+export const PLAYER_SPEED = 0.15; // Horizontal movement (~9 units/sec at 60fps)
+export const PLAYER_JUMP_FORCE = 0.5; // Upward impulse on jump (higher to reach platforms)
+export const COYOTE_TIME = 6;
+export const JUMP_BUFFER = 4;
+export const ROLL_DURATION = 15;
+export const ROLL_INVINCIBILITY = 10;
+export const ROLL_SPEED = 12;
+
+export const PIT_DEATH_Y = SCREEN_HEIGHT + 100;
+
+// ============================================================================
 // Wyrm
-export const WYRM_BASE_SPEED = 1.8;
-export const WYRM_SURGE_MULTIPLIER = 1.5;
-export const WYRM_SLOW_MULTIPLIER = 0.7;
-export const WYRM_SEGMENT_COUNT = 10;
-export const WYRM_LEVEL_SCALING = 0.05; // +5% per level
+// ============================================================================
 
-// Collision Layers (bitmask)
-export enum CollisionLayer {
-  NONE = 0,
-  PLAYER = 1 << 0,      // 1
-  ENEMY = 1 << 1,       // 2
-  PLATFORM = 1 << 2,    // 4
-  HAZARD = 1 << 3,      // 8
-  WYRM = 1 << 4,        // 16
-  PROJECTILE = 1 << 5,  // 32
-}
+// Wyrm speeds are per-frame values (like PLAYER_SPEED = 0.15)
+// Player can outrun wyrm at base speed, but wyrm catches up if player idles
+export const WYRM_BASE_SPEED = 0.08;       // Closer to player speed (0.15) for chase pressure
+export const WYRM_SURGE_MULTIPLIER = 1.5;  // 0.12 when player moves toward wyrm
+export const WYRM_SLOW_MULTIPLIER = 0.7;   // 0.056 when player is far ahead
+export const WYRM_SEGMENT_COUNT = 12;
+export const WYRM_LEVEL_SCALING = 0.08;
+export const WYRM_MAX_SPEED = 0.12;        // Can almost catch idle player, creates real pressure
+export const WYRM_START_X = -15;           // Start closer so player sees wyrm quickly
 
-export const COLLISION_MATRIX: Record<CollisionLayer, number> = {
-  [CollisionLayer.NONE]: 0,
-  [CollisionLayer.PLAYER]: CollisionLayer.ENEMY | CollisionLayer.PLATFORM |
-                           CollisionLayer.HAZARD | CollisionLayer.WYRM |
-                           CollisionLayer.PROJECTILE,
-  [CollisionLayer.ENEMY]: CollisionLayer.PLAYER | CollisionLayer.PLATFORM |
-                          CollisionLayer.PROJECTILE,
-  [CollisionLayer.PLATFORM]: CollisionLayer.PLAYER | CollisionLayer.ENEMY,
-  [CollisionLayer.HAZARD]: CollisionLayer.PLAYER,
-  [CollisionLayer.WYRM]: CollisionLayer.PLAYER,
-  [CollisionLayer.PROJECTILE]: CollisionLayer.PLAYER | CollisionLayer.ENEMY |
-                               CollisionLayer.PLATFORM,
-};
-
-// Weapons
-export type WeaponType = 'rapier' | 'broadsword' | 'bow';
+// ============================================================================
+// Combat
+// ============================================================================
 
 export interface WeaponData {
   readonly name: string;
   readonly range: number;
-  readonly speed: number;
-  readonly cooldown: number;
+  readonly anticipationFrames: number;
+  readonly activeFrames: number;
+  readonly recoveryFrames: number;
   readonly damage: number;
   readonly knockback: number;
-  readonly priority: number;
-  readonly losesTo: WeaponType;
-  readonly isRanged: boolean;
-  readonly projectileSpeed?: number;
-  readonly color: string;
-  readonly width: number;
+  readonly hitPauseFrames: number;
 }
 
-export const WEAPONS: Readonly<Record<WeaponType, WeaponData>> = {
+export const WEAPONS: Readonly<Record<Exclude<WeaponType, 'none'>, WeaponData>> = {
   rapier: {
     name: 'Rapier',
     range: 55,
-    speed: 6,
-    cooldown: 20,
+    anticipationFrames: 3,
+    activeFrames: 4,
+    recoveryFrames: 7,
     damage: 1,
     knockback: 3,
-    priority: 1,
-    losesTo: 'broadsword',
-    isRanged: false,
-    color: '#555',
-    width: 2,
+    hitPauseFrames: 2,
   },
   broadsword: {
     name: 'Broadsword',
     range: 45,
-    speed: 3,
-    cooldown: 35,
+    anticipationFrames: 6,
+    activeFrames: 5,
+    recoveryFrames: 10,
     damage: 2,
     knockback: 8,
-    priority: 2,
-    losesTo: 'bow',
-    isRanged: false,
-    color: '#333',
-    width: 6,
+    hitPauseFrames: 4,
   },
   bow: {
     name: 'Bow',
-    range: 250,
-    speed: 5,
-    cooldown: 40,
+    range: 400,
+    anticipationFrames: 10,
+    activeFrames: 2,
+    recoveryFrames: 8,
     damage: 1,
     knockback: 2,
-    priority: 3,
-    losesTo: 'rapier',
-    isRanged: true,
-    projectileSpeed: 12,
-    color: '#664422',
-    width: 2,
+    hitPauseFrames: 2,
   },
 };
 
-export const WEAPON_CYCLE_ORDER: readonly WeaponType[] = ['rapier', 'broadsword', 'bow'];
+export const WEAPON_CYCLE: readonly Exclude<WeaponType, 'none'>[] = ['rapier', 'broadsword', 'bow'];
 
+// Unarmed combat
+export const PUNCH_RANGE = 20;
+export const PUNCH_DAMAGE = 0.5;
+export const PUNCH_COOLDOWN = 10;
+export const KNOCKDOWN_DURATION = 30;
+export const DISARM_WINDOW = 4;
+
+// Thrown weapons
+export const THROW_SPEED = 15;
+export const THROW_GRAVITY = 0.2;
+export const THROW_ROTATION = 0.4;
+export const MAX_THROW_DISTANCE = 400;
+
+// ============================================================================
 // Enemies
-export type EnemyType = 'guard' | 'brute' | 'archer' | 'runner' | 'elite';
+// ============================================================================
 
 export interface EnemyData {
-  readonly weapon: WeaponType;
+  readonly weapon: Exclude<WeaponType, 'none'>;
   readonly hp: number;
   readonly speed: number;
-  readonly aggroRange: number;
+  readonly detectionRange: number;
   readonly attackRange: number;
-  readonly shootCooldown?: number;
   readonly adapts?: boolean;
 }
 
-export const ENEMY_TYPES: Readonly<Record<EnemyType, EnemyData>> = {
-  guard: { weapon: 'rapier', hp: 1, speed: 2.5, aggroRange: 200, attackRange: 45 },
-  brute: { weapon: 'broadsword', hp: 2, speed: 1.5, aggroRange: 200, attackRange: 40 },
-  archer: { weapon: 'bow', hp: 1, speed: 0, aggroRange: 300, attackRange: 250, shootCooldown: 90 },
-  runner: { weapon: 'rapier', hp: 1, speed: 4, aggroRange: 300, attackRange: 40 },
-  elite: { weapon: 'rapier', hp: 2, speed: 2, aggroRange: 250, attackRange: 50, adapts: true },
+// NOTE: Detection and attack ranges are in Three.js units (not pixels)
+// Camera view is approximately 30-40 units wide
+export const ENEMIES: Readonly<Record<EnemyType, EnemyData>> = {
+  guard: { weapon: 'rapier', hp: 1, speed: 0.08, detectionRange: 12, attackRange: 2 },
+  brute: { weapon: 'broadsword', hp: 2, speed: 0.06, detectionRange: 10, attackRange: 1.8 },
+  archer: { weapon: 'bow', hp: 1, speed: 0, detectionRange: 15, attackRange: 12 },
+  runner: { weapon: 'rapier', hp: 1, speed: 0.12, detectionRange: 15, attackRange: 2 },
+  elite: { weapon: 'rapier', hp: 2, speed: 0.08, detectionRange: 14, attackRange: 2, adapts: true },
 };
 
-// AI States
-export type AIState = 'idle' | 'patrol' | 'chase' | 'attack' | 'stagger';
-
-// Hazards
-export type HazardType = 'lava' | 'spikes' | 'void';
-
-export const COLORS = {
-  bg: '#F5F5F0',
-  bgAlt: '#EAEAE5',
-  line: '#1A1A1A',
-  lineLight: '#444',
-  platform: '#2A2A2A',
-  platformTop: '#3A3A3A',
-  hazard: '#FF6B35',
-  hazardGlow: 'rgba(255, 107, 53, 0.4)',
-  wyrm: '#8B0000',
-  wyrmBody: '#1A1A1A',
-  wyrmHighlight: '#333',
-  player: '#E63946',
-  enemy: '#457B9D',
-  enemyBrute: '#6A4C93',
-  safe: '#4A7C59',
-  projectile: '#CC3333',
-  clash: '#FFD700',
-  spikes: '#CC3333',
-  background: '#F5F5F0',
-  text: '#1A1A1A',
-  accent: '#E63946',
-  primary: '#457B9D',
-  danger: '#CC3333',
-  success: '#4A7C59',
-} as const;
-
-// Input Actions
-export type InputAction =
-  | 'moveLeft'
-  | 'moveRight'
-  | 'jump'
-  | 'attack'
-  | 'throw'
-  | 'pause';
-
-// Game States
-export type GameState =
-  | 'boot'
-  | 'title'
-  | 'customize'
-  | 'playing'
-  | 'paused'
-  | 'death'
-  | 'gameover'
-  | 'levelComplete'
-  | 'victory';
-
 // ============================================================================
-// PHASE 2: Combat Feel & Polish Constants
+// Camera
 // ============================================================================
 
-// Attack Phases
-export type AttackPhase = 'idle' | 'anticipation' | 'action' | 'impact' | 'recovery';
+export const CAMERA_FOV = 50;
+export const CAMERA_NEAR = 0.1;
+export const CAMERA_FAR = 1000;
+export const CAMERA_POSITION = { x: 0, y: 5, z: 20 };
+export const CAMERA_LOOK_AT = { x: 0, y: 3, z: 0 };
 
-// Attack Frame Data (at 60 FPS)
-export interface AttackFrameData {
-  readonly anticipation: number;
-  readonly action: number;
-  readonly impact: number;
-  readonly recovery: number;
-  readonly total: number;
-}
+export const CAMERA_DEADZONE_LEFT = 0.25;
+export const CAMERA_DEADZONE_RIGHT = 0.65;
 
-export const ATTACK_FRAME_DATA: Readonly<Record<WeaponType, AttackFrameData>> = {
-  rapier: {
-    anticipation: 3,
-    action: 4,
-    impact: 2,
-    recovery: 7,
-    total: 16, // 267ms
-  },
-  broadsword: {
-    anticipation: 8,
-    action: 5,
-    impact: 4,
-    recovery: 11,
-    total: 28, // 467ms
-  },
-  bow: {
-    anticipation: 10, // draw time (minimum)
-    action: 0, // hold (variable, up to 60 frames)
-    impact: 2, // release
-    recovery: 8,
-    total: 20, // minimum without hold
-  },
-};
+// ============================================================================
+// Visual Effects
+// ============================================================================
 
-// Screen Shake Configurations
 export interface ScreenShakeConfig {
   readonly intensity: number;
   readonly duration: number;
   readonly decay: number;
-  readonly direction: 'forward' | 'horizontal' | 'omnidirectional';
 }
 
-export const SCREEN_SHAKE_CONFIGS = {
-  rapierHit: {
-    intensity: 3,
-    duration: 6,
-    decay: 0.85,
-    direction: 'forward',
-  },
-  broadswordHit: {
-    intensity: 10,
-    duration: 12,
-    decay: 0.75,
-    direction: 'omnidirectional',
-  },
-  bowHit: {
-    intensity: 5,
-    duration: 4,
-    decay: 0.9,
-    direction: 'forward',
-  },
-  clash: {
-    intensity: 8,
-    duration: 10,
-    decay: 0.8,
-    direction: 'omnidirectional',
-  },
-  playerDeath: {
-    intensity: 15,
-    duration: 20,
-    decay: 0.7,
-    direction: 'omnidirectional',
-  },
-  wyrmSnap: {
-    intensity: 12,
-    duration: 15,
-    decay: 0.75,
-    direction: 'horizontal',
-  },
+export const SCREEN_SHAKE = {
+  rapierHit: { intensity: 3, duration: 100, decay: 0.85 },
+  broadswordHit: { intensity: 8, duration: 150, decay: 0.75 },
+  clash: { intensity: 6, duration: 120, decay: 0.8 },
+  wyrmClose: { intensity: 2, duration: 50, decay: 0.9 },
+  playerDeath: { intensity: 12, duration: 200, decay: 0.7 },
 } as const satisfies Record<string, ScreenShakeConfig>;
 
-// Hit Pause (freeze frames on impact)
-export const HIT_PAUSE_FRAMES = {
-  rapier: 2,
-  broadsword: 4,
-  bow: 2,
-  clash: 3,
+// ============================================================================
+// Colors
+// ============================================================================
+
+export const COLORS = {
+  // Backgrounds
+  bgDark: 0x1a1a2e,
+  bgMid: 0x16213e,
+  bgLight: 0x0f3460,
+
+  // Characters
+  player: 0xe94560,
+  enemy: 0x4ea8de,
+  wyrm: 0x7b2cbf,
+  wyrmGlow: 0xc77dff,
+
+  // Environment
+  platform: 0x2d3436,
+  platformEdge: 0x636e72,
+  hazard: 0xff6b35,
+
+  // Effects
+  slash: 0xffffff,
+  impact: 0xffd93d,
 } as const;
 
-// Thrown Weapon Constants
+// ============================================================================
+// System Priorities
+// ============================================================================
+
+export const SYSTEM_PRIORITY = {
+  Input: 0,
+  AI: 10,
+  Fencing: 20,
+  Combat: 25,
+  ThrownWeapon: 26,
+  Roll: 27,
+  Movement: 30,
+  Collision: 40,
+  Hazard: 45,
+  Wyrm: 50,
+  ScreenTransition: 55,
+  Camera: 60,
+  Ghost: 65,
+  Particle: 70,
+  Animation: 75,
+  UI: 90,
+  Render: 100,
+} as const;
+
+// ============================================================================
+// Wyrm Behavior (extracted from WyrmSystem)
+// ============================================================================
+
+export const WYRM_BEHAVIOR = {
+  Y_TRACKING_LERP: 0.02,
+  SEGMENT_FOLLOW_LERP: 0.3,
+  WAVE_AMPLITUDE: 0.5,
+  WAVE_FREQUENCY: 0.1,
+  COLLISION_DISTANCE: 2.0,
+  SHAKE_TRIGGER_DISTANCE: 10.0,
+  FAR_AHEAD_DISTANCE: 20.0,
+  MIN_SPEED_MULTIPLIER: 0.5,
+  SEGMENT_OFFSET: 1.5,
+  SEGMENT_PHASE_OFFSET: 0.5,
+  SEGMENT_SPACING: 1.2,
+} as const;
+
+// ============================================================================
+// AI Behavior (extracted from AISystem)
+// ============================================================================
+
+export const AI_BEHAVIOR = {
+  DECISION_COOLDOWN_FRAMES: 10,
+  RETREAT_DISTANCE: 4,
+  RETREAT_DURATION_FRAMES: 30,
+  DISENGAGE_RANGE_MULTIPLIER: 1.2,
+  COUNTER_PROBABILITY: 0.3,
+  RETREAT_SPEED_MULTIPLIER: 0.7,
+} as const;
+
+// ============================================================================
+// Combat Detection (extracted from CombatSystem)
+// ============================================================================
+
+export const COMBAT_DETECTION = {
+  DEFAULT_MELEE_RANGE: 2.0,
+  VERTICAL_HIT_TOLERANCE: 1.5,
+  CANVAS_TO_THREEJS_SCALE: 25,
+  DIVE_KICK_VELOCITY: { vx: 0.3, vy: -0.4 },
+  TRIP_RANGE: 1.5,
+  KNOCKDOWN_FRAMES: 30,
+  PARRY_SCREEN_SHAKE: { intensity: 6, duration: 120 },
+  DAMAGE_SCREEN_SHAKE: { intensity: 7, duration: 150 },
+  DEFAULT_HIT_PAUSE_FRAMES: 2,
+} as const;
+
+// ============================================================================
+// Thrown Weapon Physics (extracted from ThrownWeaponSystem)
+// ============================================================================
+
 export const THROWN_WEAPON = {
-  speed: 15,
-  maxDistance: 300,
-  gravity: 0.15,
-  rotationSpeed: 0.3,
+  GROUND_LEVEL: 0.5,
+  PROJECTILE_HIT_RADIUS: 0.8,
+  VERTICAL_HIT_TOLERANCE: 1.0,
+  PICKUP_RADIUS: 1.0,
+  PLATFORM_COLLISION_TOLERANCE: 0.5,
+  // Frame time conversion factor (ms to per-frame)
+  FRAME_TIME_FACTOR: 0.016,
+  // Weapon mesh dimensions
+  BLADE: {
+    LONG_LENGTH: 0.9,
+    SHORT_LENGTH: 0.7,
+    WIDE_WIDTH: 0.08,
+    NARROW_WIDTH: 0.04,
+    DEPTH: 0.02,
+  },
+  HILT: {
+    LENGTH: 0.15,
+    WIDTH: 0.08,
+    DEPTH: 0.04,
+  },
+  // Stuck weapon rotation angles
+  STUCK_ANGLE_DOWN: Math.PI / 4,
+  STUCK_ANGLE_FLAT: Math.PI / 2,
 } as const;
 
-// Unarmed Combat Constants
-export const UNARMED = {
-  punchRange: 15,
-  punchDamage: 0.5,
-  punchCooldown: 12,
-  disarmWindow: 4, // frames of perfect timing for disarm
-} as const;
+// ============================================================================
+// Collision System (extracted from CollisionSystem)
+// ============================================================================
 
-// Slash Trail Constants
-export const SLASH_TRAIL = {
-  maxPoints: 8,
-  fadeFrames: 5,
-  baseWidth: 2,
-  rapierWidth: 3,
-  broadswordWidth: 8,
-} as const;
-
-// Combat Colors
-export const COMBAT_COLORS = {
-  slashTrail: 'rgba(255, 255, 255, 0.6)',
-  slashTrailRapier: 'rgba(200, 200, 200, 0.7)',
-  slashTrailBroadsword: 'rgba(150, 150, 150, 0.8)',
-  impactSpark: '#FFD700',
-  impactDust: '#8B8B8B',
-  hitFlash: '#FFFFFF',
+export const COLLISION = {
+  ONE_WAY_EPSILON: 0.15,
 } as const;

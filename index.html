@@ -1,80 +1,82 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wyrm Chase</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-
-      body {
-        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 100vh;
-        font-family: 'Arial', sans-serif;
-        color: #f5f5f0;
-      }
-
-      #game-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1rem;
-        padding: 2rem;
-      }
-
-      #game-title {
-        font-size: 2.5rem;
-        font-weight: bold;
-        letter-spacing: 0.3em;
-        color: #f5f5f0;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-        margin-bottom: 0.5rem;
-      }
-
-      #game-subtitle {
-        font-size: 0.875rem;
-        color: #888;
-        margin-bottom: 1rem;
-      }
-
-      #canvas-wrapper {
-        border: 4px solid #444;
-        border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-        background: #000;
-      }
-
-      canvas {
-        display: block;
-        image-rendering: pixelated;
-        image-rendering: crisp-edges;
-      }
-
-      #game-info {
-        font-size: 0.75rem;
-        color: #666;
-        text-align: center;
-        max-width: 600px;
-      }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            overflow: hidden;
+            background: #1a1a2e;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        canvas { display: block; }
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #e94560;
+            font-size: 1.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+        }
     </style>
-  </head>
-  <body>
+</head>
+<body>
     <div id="game-container">
-      <h1 id="game-title">WYRM CHASE</h1>
-      <p id="game-subtitle">Escape. Fight. Survive.</p>
-      <div id="canvas-wrapper"></div>
-      <p id="game-info">
-        Prototype v1.0 | WASD: Move & Jump | Z: Attack | ESC: Pause
-      </p>
+        <div id="loading">Loading...</div>
+        <div id="ui-layer">
+            <div id="vignette"></div>
+            
+            <div id="hud">
+                <div id="hud-health">
+                    <div class="life-block"></div>
+                    <div class="life-block"></div>
+                    <div class="life-block"></div>
+                </div>
+                <div id="hud-wyrm">
+                    <div id="wyrm-bar"></div>
+                </div>
+                <div id="hud-weapon">
+                    <div class="weapon-icon">⚔️</div>
+                    <div id="weapon-name">Rapier</div>
+                </div>
+            </div>
+
+            <div id="menus">
+                <div id="title-screen" class="screen hidden">
+                    <h1>Wyrm Chase</h1>
+                    <button id="start-button" class="menu-button">Start Game</button>
+                    <div class="cta-text">or press Space</div>
+                </div>
+                <div id="pause-screen" class="screen hidden">
+                    <h1>Paused</h1>
+                    <div class="cta-text">Press Esc to Resume</div>
+                </div>
+                <div id="game-over-screen" class="screen hidden">
+                    <h1>SLAIN</h1>
+                    <button id="retry-button" class="menu-button">Try Again</button>
+                </div>
+                <div id="victory-screen" class="screen hidden">
+                    <h1>ESCAPED</h1>
+                    <div class="cta-text">You survived the wyrm!</div>
+                    <button id="play-again-button" class="menu-button">Play Again</button>
+                </div>
+            </div>
+            
+            <div id="notifications"></div>
+        </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
-  </body>
+</body>
 </html>

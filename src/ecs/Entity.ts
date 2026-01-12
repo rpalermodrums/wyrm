@@ -1,3 +1,10 @@
+/**
+ * Entity - Container for components in the ECS pattern
+ *
+ * Entities are just IDs with a collection of components.
+ * All game logic lives in Systems.
+ */
+
 import type { Component, Entity as IEntity } from '../types';
 
 let entityIdCounter = 0;
@@ -31,7 +38,7 @@ export class Entity implements IEntity {
     this.components.delete(type);
   }
 
-  hasComponents(types: string[]): boolean {
+  hasComponents(types: readonly string[]): boolean {
     return types.every((type) => this.components.has(type));
   }
 }

@@ -1,63 +1,49 @@
-import type { EventBus, GameEvent, GameEventType, EventHandler } from '../types';
+/**
+ * EventBus - Decoupled event-driven communication
+ *
+ * Systems emit events, other systems listen.
+ * Prevents tight coupling between systems.
+ */
 
-export class Events implements EventBus {
-  private handlers: Map<GameEventType, Set<EventHandler>> = new Map();
+import type { GameEvent, EventBus as IEventBus } from '../types';
 
-  emit<T extends GameEvent>(event: T): void {
-    const handlers = this.handlers.get(event.type);
-    if (handlers) {
-      handlers.forEach((handler) => {
-        (handler as EventHandler<T>)(event);
-      });
-    }
-  }
+type EventHandler<T extends GameEvent = GameEvent> = (event: T) => void;
 
-  on<T extends GameEventType>(
-    type: T,
-    handler: EventHandler<Extract<GameEvent, { type: T }>>
-  ): () => void {
-    if (!this.handlers.has(type)) {
-      this.handlers.set(type, new Set());
-    }
+export class EventBus implements IEventBus {
+  private readonly handlers: Map<string, Set<EventHandler>> = new Map();
 
-    const handlers = this.handlers.get(type)!;
-    handlers.add(handler as EventHandler);
-
-    return () => this.off(type, handler as EventHandler);
-  }
-
-  off(type: GameEventType, handler: EventHandler): void {
-    const handlers = this.handlers.get(type);
-    if (handlers) {
-      handlers.delete(handler);
-      if (handlers.size === 0) {
-        this.handlers.delete(type);
+  emit(event: GameEvent): void {
+    const typeHandlers = this.handlers.get(event.type);
+    if (typeHandlers) {
+      for (const handler of typeHandlers) {
+        handler(event);
       }
+    }
+  }
+
+  on<T extends GameEvent['type']>(
+    type: T,
+    handler: (event: Extract<GameEvent, { type: T }>) => void
+  ): void {
+    let typeHandlers = this.handlers.get(type);
+    if (!typeHandlers) {
+      typeHandlers = new Set();
+      this.handlers.set(type, typeHandlers);
+    }
+    typeHandlers.add(handler as EventHandler);
+  }
+
+  off<T extends GameEvent['type']>(
+    type: T,
+    handler: (event: Extract<GameEvent, { type: T }>) => void
+  ): void {
+    const typeHandlers = this.handlers.get(type);
+    if (typeHandlers) {
+      typeHandlers.delete(handler as EventHandler);
     }
   }
 
   clear(): void {
     this.handlers.clear();
-  }
-
-  once<T extends GameEventType>(
-    type: T,
-    handler: EventHandler<Extract<GameEvent, { type: T }>>
-  ): void {
-    const wrappedHandler = (event: GameEvent) => {
-      this.off(type, wrappedHandler as EventHandler);
-      (handler as EventHandler)(event);
-    };
-    this.on(type, wrappedHandler as EventHandler<Extract<GameEvent, { type: T }>>);
-  }
-
-  hasListeners(type: GameEventType): boolean {
-    const handlers = this.handlers.get(type);
-    return handlers !== undefined && handlers.size > 0;
-  }
-
-  getListenerCount(type: GameEventType): number {
-    const handlers = this.handlers.get(type);
-    return handlers ? handlers.size : 0;
   }
 }

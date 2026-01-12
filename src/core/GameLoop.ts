@@ -1,72 +1,67 @@
+/**
+ * GameLoop - Fixed timestep game loop with interpolated rendering
+ *
+ * Physics runs at fixed 60 FPS for deterministic behavior.
+ * Rendering can run at any frame rate.
+ */
+
 import { FIXED_TIMESTEP, MAX_DELTA } from '../constants';
 
-export type GameLoopCallback = (deltaTime: number) => void;
+export type UpdateCallback = (deltaTime: number) => void;
 export type RenderCallback = (alpha: number) => void;
 
 export class GameLoop {
-  private running: boolean = false;
-  private lastTime: number = 0;
-  private accumulator: number = 0;
-  private frameId: number = 0;
+  private accumulator = 0;
+  private lastTime = 0;
+  private isRunning = false;
+  private animationFrameId: number | null = null;
 
-  private updateCallback: GameLoopCallback;
-  private renderCallback: RenderCallback;
-
-  constructor(updateCallback: GameLoopCallback, renderCallback: RenderCallback) {
-    this.updateCallback = updateCallback;
-    this.renderCallback = renderCallback;
-  }
+  constructor(
+    private readonly onUpdate: UpdateCallback,
+    private readonly onRender: RenderCallback,
+    private readonly onFrameEnd?: () => void,
+    private readonly onFixedUpdateEnd?: () => void
+  ) {}
 
   start(): void {
-    if (this.running) {
-      return;
-    }
+    if (this.isRunning) return;
 
-    this.running = true;
+    this.isRunning = true;
     this.lastTime = performance.now();
     this.accumulator = 0;
-    this.loop(this.lastTime);
+    this.tick(this.lastTime);
   }
 
   stop(): void {
-    this.running = false;
-    if (this.frameId) {
-      cancelAnimationFrame(this.frameId);
-      this.frameId = 0;
+    this.isRunning = false;
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
     }
   }
 
-  private loop = (currentTime: number): void => {
-    if (!this.running) {
-      return;
-    }
+  private tick = (currentTime: number): void => {
+    if (!this.isRunning) return;
 
-    this.frameId = requestAnimationFrame(this.loop);
-
-    let deltaTime = currentTime - this.lastTime;
+    const deltaTime = Math.min(currentTime - this.lastTime, MAX_DELTA);
     this.lastTime = currentTime;
-
-    if (deltaTime > MAX_DELTA) {
-      deltaTime = MAX_DELTA;
-    }
-
     this.accumulator += deltaTime;
 
+    // Fixed timestep updates
     while (this.accumulator >= FIXED_TIMESTEP) {
-      this.updateCallback(FIXED_TIMESTEP);
+      this.onUpdate(FIXED_TIMESTEP);
+      // Clear edge-triggered input after each fixed update to prevent multi-processing
+      this.onFixedUpdateEnd?.();
       this.accumulator -= FIXED_TIMESTEP;
     }
 
+    // Interpolated render
     const alpha = this.accumulator / FIXED_TIMESTEP;
-    this.renderCallback(alpha);
+    this.onRender(alpha);
+
+    // Frame end callback (for input cleanup, etc.)
+    this.onFrameEnd?.();
+
+    this.animationFrameId = requestAnimationFrame(this.tick);
   };
-
-  get isRunning(): boolean {
-    return this.running;
-  }
-
-  reset(): void {
-    this.lastTime = performance.now();
-    this.accumulator = 0;
-  }
 }
