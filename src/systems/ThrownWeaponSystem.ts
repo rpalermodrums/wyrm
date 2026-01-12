@@ -12,6 +12,7 @@ import type {
   World,
   TransformComponent,
   VelocityComponent,
+  ColliderComponent,
   ThrownWeaponComponent,
   ThreeObjectComponent,
   HealthComponent,
@@ -39,8 +40,19 @@ const {
   GROUND_LEVEL,
   PROJECTILE_HIT_RADIUS,
   VERTICAL_HIT_TOLERANCE,
-  PICKUP_RADIUS
+  PICKUP_RADIUS,
+  PLATFORM_COLLISION_TOLERANCE,
+  FRAME_TIME_FACTOR,
+  STUCK_ANGLE_DOWN,
+  STUCK_ANGLE_FLAT,
 } = THROWN_WEAPON;
+
+interface AABB {
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minY: number;
+  readonly maxY: number;
+}
 
 /**
  * Create a simple sword mesh for the thrown weapon
@@ -131,8 +143,8 @@ export class ThrownWeaponSystem implements System {
     // Use direction for horizontal, add slight upward arc
     entity.addComponent({
       type: 'velocity',
-      vx: THROW_SPEED * event.direction * 0.016, // Convert to per-frame (roughly)
-      vy: THROW_SPEED * 0.3 * 0.016, // Slight upward arc
+      vx: THROW_SPEED * event.direction * FRAME_TIME_FACTOR, // Convert to per-frame (roughly)
+      vy: THROW_SPEED * 0.3 * FRAME_TIME_FACTOR, // Slight upward arc
       vz: 0,
     });
 
@@ -192,7 +204,7 @@ export class ThrownWeaponSystem implements System {
       }
 
       // Apply gravity to velocity
-      velocity.vy -= THROW_GRAVITY * 0.016; // Per-frame gravity
+      velocity.vy -= THROW_GRAVITY * FRAME_TIME_FACTOR; // Per-frame gravity
 
       // Track distance traveled (horizontal only)
       const distanceThisFrame = Math.abs(velocity.vx);
@@ -203,7 +215,7 @@ export class ThrownWeaponSystem implements System {
       threeObj.object.rotation.z = thrownWeapon.rotation;
 
       // Check if exceeded max distance
-      if (thrownWeapon.traveledDistance >= MAX_THROW_DISTANCE * 0.016) {
+      if (thrownWeapon.traveledDistance >= MAX_THROW_DISTANCE * FRAME_TIME_FACTOR) {
         log(`Thrown weapon exceeded max distance, destroying: ${entity.id}`);
         this.destroyThrownWeapon(entity);
         continue;
@@ -247,6 +259,7 @@ export class ThrownWeaponSystem implements System {
       const targetHealth = target.getComponent<HealthComponent>('health');
 
       if (!targetTransform || !targetHealth) continue;
+      if (targetHealth.invincibilityFrames > 0) continue;
 
       // Calculate distance
       const dx = targetTransform.x - projectileTransform.x;
@@ -297,24 +310,26 @@ export class ThrownWeaponSystem implements System {
   ): boolean {
     if (!this.world) return false;
 
+    const projectileCollider = projectile.getComponent<ColliderComponent>('collider');
+    if (!projectileCollider) return false;
+
+    const projectileAABB = this.getAABB(transform, projectileCollider, PLATFORM_COLLISION_TOLERANCE);
+
     // Query platforms
     const platforms = this.world.query(['transform', 'platform', 'collider']);
 
     for (const platform of platforms) {
       const platTransform = platform.getComponent<TransformComponent>('transform');
-      if (!platTransform) continue;
+      const platCollider = platform.getComponent<ColliderComponent>('collider');
+      if (!platTransform || !platCollider) continue;
 
-      // Simple AABB check - if projectile overlaps platform, stick it
-      // This is a simplified check; a full implementation would use proper collision
-      const dx = Math.abs(transform.x - platTransform.x);
-      const dy = Math.abs(transform.y - platTransform.y);
+      const platformAABB = this.getAABB(platTransform, platCollider);
 
-      // Platform collision tolerance
-      if (dx < 0.5 && dy < 0.5) {
-        log(`Thrown weapon hit platform`);
-        this.stickWeapon(projectile, transform, velocity, thrownWeapon, 'wall');
-        return true;
-      }
+      if (!this.intersects(projectileAABB, platformAABB)) continue;
+
+      log(`Thrown weapon hit platform`);
+      this.stickWeapon(projectile, transform, velocity, thrownWeapon, 'wall');
+      return true;
     }
 
     return false;
@@ -345,10 +360,10 @@ export class ThrownWeaponSystem implements System {
     if (threeObj) {
       if (stuckIn === 'ground') {
         // Point downward into ground
-        threeObj.object.rotation.z = thrownWeapon.direction > 0 ? -Math.PI / 4 : Math.PI / 4;
+        threeObj.object.rotation.z = thrownWeapon.direction > 0 ? -STUCK_ANGLE_DOWN : STUCK_ANGLE_DOWN;
       } else {
         // Point into wall
-        threeObj.object.rotation.z = thrownWeapon.direction > 0 ? -Math.PI / 2 : Math.PI / 2;
+        threeObj.object.rotation.z = thrownWeapon.direction > 0 ? -STUCK_ANGLE_FLAT : STUCK_ANGLE_FLAT;
       }
     }
 
@@ -407,6 +422,28 @@ export class ThrownWeaponSystem implements System {
 
     log(`Destroying thrown weapon entity: ${entity.id}`);
     this.world.destroyEntity(entity.id);
+  }
+
+  private getAABB(
+    transform: TransformComponent,
+    collider: ColliderComponent,
+    padding: number = 0
+  ): AABB {
+    const centerX = transform.x + collider.offsetX;
+    const centerY = transform.y + collider.offsetY;
+    const halfWidth = collider.width / 2 + padding;
+    const halfHeight = collider.height / 2 + padding;
+
+    return {
+      minX: centerX - halfWidth,
+      maxX: centerX + halfWidth,
+      minY: centerY - halfHeight,
+      maxY: centerY + halfHeight,
+    };
+  }
+
+  private intersects(a: AABB, b: AABB): boolean {
+    return a.minX < b.maxX && a.maxX > b.minX && a.minY < b.maxY && a.maxY > b.minY;
   }
 
   onEntityRemoved(entity: Entity): void {

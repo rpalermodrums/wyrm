@@ -61,7 +61,7 @@ export class CollisionSystem implements System {
       if (!transform || !collider) continue;
 
       // Skip static/non-colliding entities
-      if (entity.hasComponent('platform') || entity.hasComponent('hazard')) continue;
+      if (entity.hasComponent('platform') || entity.hasComponent('hazard') || entity.hasComponent('thrownWeapon')) continue;
 
       // Reset grounded state - will be set true if we're on a platform
       if (playerCtrl) {
@@ -155,9 +155,8 @@ export class CollisionSystem implements System {
     // For one-way platforms, only resolve if coming from above (falling)
     if (isOneWay) {
       // Only collide if entity's feet are near platform top and falling (vy <= 0 in Y+ up coords)
-      // Use small epsilon (0.15 units) to prevent snapping from far below - must be near platform surface
+      // Use small epsilon to prevent snapping from far below - must be near platform surface
       const feetY = entityAABB.minY;
-      const ONE_WAY_EPSILON = 0.15;
       if (velocity && velocity.vy <= 0 && feetY >= platformAABB.maxY - ONE_WAY_EPSILON) {
         // Landing on top of one-way platform
         transform.y = platformAABB.maxY - collider.offsetY + collider.height / 2;

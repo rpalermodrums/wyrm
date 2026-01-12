@@ -36,6 +36,10 @@ export class RollSystem implements System {
 
       if (!playerControlled || !velocity || !health) continue;
 
+      if (health.invincibilityFrames > 0) {
+        health.invincibilityFrames = Math.max(0, health.invincibilityFrames - 1);
+      }
+
       // Handle active roll countdown
       if (playerControlled.isRolling) {
         playerControlled.rollFrames -= 1;

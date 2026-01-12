@@ -7,6 +7,7 @@ import type {
   VelocityComponent,
   FencerComponent,
   WeaponComponent,
+  HealthComponent,
   SwordPosition,
 } from '../types';
 import { SYSTEM_PRIORITY, ENEMIES, AI_BEHAVIOR } from '../constants';
@@ -56,9 +57,26 @@ export class AISystem implements System {
       const velocity = entity.getComponent<VelocityComponent>('velocity');
       const fencer = entity.getComponent<FencerComponent>('fencer');
       const weapon = entity.getComponent<WeaponComponent>('weapon');
+      const health = entity.getComponent<HealthComponent>('health');
 
-      if (!ai || !transform || !velocity || !fencer || !weapon) continue;
+      if (!ai || !transform || !velocity || !fencer || !weapon || !health) continue;
       if (ai.state === 'dead') continue;
+
+      if (health.isKnockedDown) {
+        health.knockdownFrames = Math.max(0, health.knockdownFrames - 1);
+        velocity.vx = 0;
+        weapon.isAttacking = false;
+        weapon.attackPhase = 'idle';
+        weapon.attackFrame = 0;
+
+        if (health.knockdownFrames <= 0) {
+          health.isKnockedDown = false;
+          ai.state = 'idle';
+          ai.decisionCooldown = DECISION_COOLDOWN_FRAMES;
+        }
+
+        continue;
+      }
 
       const distance = Math.abs(playerTransform.x - transform.x);
       const enemyConfig = ENEMIES[ai.aiType];
@@ -98,7 +116,7 @@ export class AISystem implements System {
         break;
 
       case 'engage':
-        if (distance > enemyConfig.detectionRange * 1.2) {
+        if (distance > enemyConfig.detectionRange * DISENGAGE_RANGE_MULTIPLIER) {
           ai.state = 'idle';
           ai.decisionCooldown = DECISION_COOLDOWN_FRAMES;
         } else if (distance < enemyConfig.attackRange && !weapon.isAttacking) {
@@ -168,7 +186,7 @@ export class AISystem implements System {
         if (playerFencer && enemyConfig.adapts) {
           fencer.swordPosition = COUNTER_POSITIONS[playerFencer.swordPosition];
         } else if (playerFencer) {
-          const shouldCounter = Math.random() < 0.3;
+          const shouldCounter = Math.random() < COUNTER_PROBABILITY;
           if (shouldCounter) {
             fencer.swordPosition = COUNTER_POSITIONS[playerFencer.swordPosition];
           }
@@ -187,7 +205,7 @@ export class AISystem implements System {
       case 'retreat':
         const retreatDirection = playerTransform.x > transform.x ? -1 : 1;
         if (distance < RETREAT_DISTANCE) {
-          velocity.vx = retreatDirection * enemyConfig.speed * 0.7;
+          velocity.vx = retreatDirection * enemyConfig.speed * RETREAT_SPEED_MULTIPLIER;
         } else {
           velocity.vx = 0;
         }

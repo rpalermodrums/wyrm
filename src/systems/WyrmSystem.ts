@@ -99,7 +99,7 @@ export class WyrmSystem implements System {
 
       // Track player Y with smooth lag (lerp)
       wyrm.targetY = playerTransform.y;
-      transform.y = this.lerp(transform.y, wyrm.targetY, Y_TRACKING_LERP);
+      transform.y = lerp(transform.y, wyrm.targetY, Y_TRACKING_LERP);
 
       // Update segment positions (follow-the-leader with wave motion)
       this.updateSegments(wyrm, transform);
@@ -169,8 +169,8 @@ export class WyrmSystem implements System {
     const firstSegment = segments[0];
     if (!firstSegment) return;
 
-    firstSegment.x = this.lerp(firstSegment.x, headTransform.x - 1.5, SEGMENT_FOLLOW_LERP);
-    firstSegment.baseY = this.lerp(firstSegment.baseY ?? firstSegment.y, headTransform.y, SEGMENT_FOLLOW_LERP);
+    firstSegment.x = lerp(firstSegment.x, headTransform.x - SEGMENT_OFFSET, SEGMENT_FOLLOW_LERP);
+    firstSegment.baseY = lerp(firstSegment.baseY ?? firstSegment.y, headTransform.y, SEGMENT_FOLLOW_LERP);
     firstSegment.y = firstSegment.baseY + Math.sin(this.waveTime * WAVE_FREQUENCY) * WAVE_AMPLITUDE;
     firstSegment.z = headTransform.z;
 
@@ -179,10 +179,10 @@ export class WyrmSystem implements System {
       const leader = segments[i - 1];
       if (!segment || !leader) continue;
 
-      const phaseOffset = i * 0.5;
+      const phaseOffset = i * SEGMENT_PHASE_OFFSET;
 
-      segment.x = this.lerp(segment.x, leader.x - 1.2, SEGMENT_FOLLOW_LERP);
-      segment.baseY = this.lerp(segment.baseY ?? segment.y, leader.baseY ?? leader.y, SEGMENT_FOLLOW_LERP);
+      segment.x = lerp(segment.x, leader.x - SEGMENT_SPACING, SEGMENT_FOLLOW_LERP);
+      segment.baseY = lerp(segment.baseY ?? segment.y, leader.baseY ?? leader.y, SEGMENT_FOLLOW_LERP);
       segment.y = segment.baseY + Math.sin(this.waveTime * WAVE_FREQUENCY + phaseOffset) * WAVE_AMPLITUDE;
       segment.z = leader.z;
     }
@@ -215,9 +215,5 @@ export class WyrmSystem implements System {
     const dx = playerTransform.x - wyrmTransform.x;
     const dy = playerTransform.y - wyrmTransform.y;
     return Math.sqrt(dx * dx + dy * dy);
-  }
-
-  private lerp(start: number, end: number, t: number): number {
-    return start + (end - start) * t;
   }
 }

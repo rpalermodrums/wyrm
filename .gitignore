@@ -113,3 +113,7 @@ coverage
 # FewWord context plugin
 .fewword/scratch/
 .fewword/index/
+
+# FewWord context plugin
+.fewword/scratch/
+.fewword/index/

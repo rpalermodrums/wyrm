@@ -19,7 +19,14 @@ import type {
   World,
 } from '../types';
 import type { EventBus } from '../core/Events';
-import { SYSTEM_PRIORITY, WEAPONS, COMBAT_DETECTION, type WeaponData } from '../constants';
+import {
+  SYSTEM_PRIORITY,
+  WEAPONS,
+  COMBAT_DETECTION,
+  PUNCH_RANGE,
+  PUNCH_DAMAGE,
+  type WeaponData,
+} from '../constants';
 import { InputManager } from '../input/InputManager';
 import { emitDeathEvents } from '../utils/deathHandler';
 import { createLogger } from '../utils/debug';
@@ -27,6 +34,16 @@ import { createLogger } from '../utils/debug';
 const log = createLogger('CombatSystem');
 
 const LUNGE_DISTANCE = 0.5;
+const UNARMED_WEAPON_DATA: WeaponData = {
+  name: 'Unarmed',
+  range: PUNCH_RANGE,
+  anticipationFrames: 3,
+  activeFrames: 2,
+  recoveryFrames: 6,
+  damage: PUNCH_DAMAGE,
+  knockback: 1,
+  hitPauseFrames: COMBAT_DETECTION.DEFAULT_HIT_PAUSE_FRAMES,
+};
 
 // Attack type for tracking special attacks
 type AttackType = 'normal' | 'diveKick' | 'trip';
@@ -76,7 +93,7 @@ export class CombatSystem implements System {
       const transform = entity.getComponent<TransformComponent>('transform');
 
       if (!fencer || !weapon || !transform) continue;
-      if (weapon.weaponType === 'none') continue;
+      if (weapon.weaponType === 'none' && !entity.hasComponent('playerControlled')) continue;
 
       this.updateAttackState(entity, fencer, weapon, transform);
     }
@@ -88,7 +105,9 @@ export class CombatSystem implements System {
     weapon: WeaponComponent,
     transform: TransformComponent
   ): void {
-    const weaponData = WEAPONS[weapon.weaponType as Exclude<typeof weapon.weaponType, 'none'>];
+    const weaponData = weapon.weaponType === 'none'
+      ? UNARMED_WEAPON_DATA
+      : WEAPONS[weapon.weaponType as Exclude<typeof weapon.weaponType, 'none'>];
 
     switch (weapon.attackPhase) {
       case 'idle':
@@ -241,6 +260,8 @@ export class CombatSystem implements System {
   }
 
   private tryThrowWeapon(entity: Entity, weapon: WeaponComponent): boolean {
+    if (weapon.weaponType === 'none') return false;
+
     const transform = entity.getComponent<TransformComponent>('transform');
     const fencer = entity.getComponent<FencerComponent>('fencer');
     const threeObj = entity.getComponent<ThreeObjectComponent>('threeObject');
@@ -326,6 +347,9 @@ export class CombatSystem implements System {
     }
 
     const attackerWeapon = attacker.getComponent<WeaponComponent>('weapon');
+    if (attackerWeapon && attackerWeapon.weaponType === 'none') {
+      return PUNCH_RANGE / COMBAT_DETECTION.CANVAS_TO_THREEJS_SCALE;
+    }
     if (attackerWeapon && attackerWeapon.weaponType !== 'none') {
       const weaponData = WEAPONS[attackerWeapon.weaponType];
       return weaponData.range / COMBAT_DETECTION.CANVAS_TO_THREEJS_SCALE;
@@ -356,6 +380,7 @@ export class CombatSystem implements System {
     const fencer = target.getComponent<FencerComponent>('fencer');
 
     if (!transform || !health || !fencer) return null;
+    if (health.invincibilityFrames > 0) return null;
 
     return { entity: target, transform, health, fencer, isPlayer: targetIsPlayer };
   }
@@ -488,10 +513,9 @@ export class CombatSystem implements System {
   }
 
   private calculateDamage(attackerWeapon: WeaponComponent | undefined): number {
-    if (attackerWeapon && attackerWeapon.weaponType !== 'none') {
-      return WEAPONS[attackerWeapon.weaponType].damage;
-    }
-    return 1;
+    if (!attackerWeapon) return PUNCH_DAMAGE;
+    if (attackerWeapon.weaponType === 'none') return PUNCH_DAMAGE;
+    return WEAPONS[attackerWeapon.weaponType].damage;
   }
 
   private emitHitPause(attackerWeapon: WeaponComponent | undefined): void {

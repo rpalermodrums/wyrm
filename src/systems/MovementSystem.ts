@@ -45,6 +45,8 @@ export class MovementSystem implements System {
       const velocity = entity.getComponent<VelocityComponent>('velocity');
       if (!transform || !velocity) continue;
 
+      const isThrownWeapon = entity.hasComponent('thrownWeapon');
+
       // Check if this is a player-controlled entity
       const playerCtrl = entity.getComponent<PlayerControlledComponent>('playerControlled');
       if (playerCtrl) {
@@ -52,7 +54,7 @@ export class MovementSystem implements System {
       }
 
       // Apply gravity to all entities with velocity (except grounded players)
-      if (!playerCtrl?.isGrounded) {
+      if (!playerCtrl?.isGrounded && !isThrownWeapon) {
         velocity.vy += GRAVITY;
         // Cap fall speed to prevent tunneling through platforms
         if (velocity.vy < MAX_FALL_SPEED) {
