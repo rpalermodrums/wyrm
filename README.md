@@ -1,4 +1,4 @@
-# Wyrm Chase V2
+# WYRM
 
 A single-player survival chase game built with Three.js and TypeScript. Escape through 5 connected screens while a relentless wyrm-dragon pursues from behind.
 
